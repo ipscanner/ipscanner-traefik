@@ -1,0 +1,12 @@
+*.test
+*.out
+coverage.*
+go.work
+go.work.sum
+.env
+test/e2e/.key
+test/e2e/*.log
+.idea/
+.vscode/
+.DS_Store
+test/e2e/.k8s.*

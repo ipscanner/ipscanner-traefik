@@ -58,6 +58,7 @@ echo "# examples/kubernetes.yml"
 kubectl create namespace example >/dev/null
 if kubectl apply -n example -f - <"$root/examples/kubernetes.yml" >"$tmp/out" 2>&1; then
 	ok "API server accepts examples/kubernetes.yml"
+	kubectl -n example create service externalname app --external-name "$APP" --tcp=80:80 >/dev/null
 else
 	bad "examples/kubernetes.yml: $(cat "$tmp/out")"
 fi
@@ -133,7 +134,7 @@ docker run -d --name "$PROXY" --network "$NET" --add-host host.docker.internal:h
 		--providers.kubernetescrd.token="$(cat /k8s/token)" \
 		--providers.kubernetescrd.certauthfilepath=/k8s/ca.crt \
 		--providers.kubernetescrd.allowexternalnameservices=true \
-		--providers.kubernetescrd.namespaces=e2e \
+		--providers.kubernetescrd.namespaces=e2e,example \
 		--experimental.localplugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik' >/dev/null
 
 for i in $(seq 1 60); do
@@ -142,6 +143,16 @@ for i in $(seq 1 60); do
 done
 mw=$(curl -s "$ADMIN/api/http/middlewares/e2e-ipscanner@kubernetescrd")
 grep -q '"status":"enabled"' <<<"$mw" && ok "middleware e2e-ipscanner@kubernetescrd enabled" || bad "middleware: $(grep -o '"error":[^]]*]' <<<"$mw")"
+for i in $(seq 1 30); do
+	curl -s "$ADMIN/api/http/middlewares" | grep -q 'example-ipscanner@kubernetescrd' && break
+	sleep 1
+done
+mw=$(curl -s "$ADMIN/api/http/middlewares/example-ipscanner@kubernetescrd")
+grep -q '"status":"enabled"' <<<"$mw" && ok "examples/kubernetes.yml middleware enabled in Traefik" || bad "example middleware: $mw"
+rt=$(curl -s "$ADMIN/api/http/routers" | node -e '
+	let s = ""; process.stdin.on("data", d => s += d).on("end", () =>
+		console.log(JSON.parse(s).filter(r => r.name.startsWith("example-app-")).map(r => r.status).join(",")));')
+expect "examples/kubernetes.yml IngressRoute enabled" "$rt" enabled
 sleep 2
 
 visit() { # ip -> code

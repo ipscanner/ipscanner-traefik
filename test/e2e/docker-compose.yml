@@ -22,6 +22,8 @@ services:
       - --experimental.localplugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik
     environment:
       IPSCANNER_API_KEY: ${IPSCANNER_API_KEY:-}
+      IPSCANNER_API_URL_DOCKER: ${IPSCANNER_API_URL_DOCKER:-http://host.docker.internal:3050}
+      E2E_TIMEOUT: ${E2E_TIMEOUT:-1500ms}
     extra_hosts:
       - host.docker.internal:host-gateway
     ports:
@@ -50,16 +52,30 @@ services:
       - traefik.http.routers.enforce.entrypoints=web
       - traefik.http.routers.enforce.middlewares=ips-enforce
       - traefik.http.middlewares.ips-enforce.plugin.ipscanner.apiUrl=${IPSCANNER_API_URL_DOCKER}
+      - traefik.http.middlewares.ips-enforce.plugin.ipscanner.timeout=${E2E_TIMEOUT:-1500ms}
       - traefik.http.middlewares.ips-enforce.plugin.ipscanner.siteId=${E2E_SITE_ENFORCE}
       - traefik.http.middlewares.ips-enforce.plugin.ipscanner.trustedProxies=private
       - traefik.http.middlewares.ips-enforce.plugin.ipscanner.policyTTL=5s
       - traefik.http.middlewares.ips-enforce.plugin.ipscanner.debug=true
+
+      # Coolify: its generated router and gzip middleware, plus the two
+      # labels from the README (apiUrl and trustedProxies for the test).
+      - traefik.http.middlewares.gzip.compress=true
+      - traefik.http.routers.https-0-e2ecoolify.rule=Host(`coolify.localhost`) && PathPrefix(`/`)
+      - traefik.http.routers.https-0-e2ecoolify.entrypoints=web
+      - traefik.http.routers.https-0-e2ecoolify.service=whoami
+      - traefik.http.routers.https-0-e2ecoolify.middlewares=gzip,ipscanner-myapp
+      - traefik.http.middlewares.ipscanner-myapp.plugin.ipscanner.siteId=${E2E_SITE_ENFORCE}
+      - traefik.http.middlewares.ipscanner-myapp.plugin.ipscanner.apiUrl=${IPSCANNER_API_URL_DOCKER}
+      - traefik.http.middlewares.ipscanner-myapp.plugin.ipscanner.timeout=${E2E_TIMEOUT:-1500ms}
+      - traefik.http.middlewares.ipscanner-myapp.plugin.ipscanner.trustedProxies=private
 
       # Dashboard site in monitor mode, key from a file.
       - traefik.http.routers.monitor.rule=Host(`monitor.localhost`)
       - traefik.http.routers.monitor.entrypoints=web
       - traefik.http.routers.monitor.middlewares=ips-monitor
       - traefik.http.middlewares.ips-monitor.plugin.ipscanner.apiUrl=${IPSCANNER_API_URL_DOCKER}
+      - traefik.http.middlewares.ips-monitor.plugin.ipscanner.timeout=${E2E_TIMEOUT:-1500ms}
       - traefik.http.middlewares.ips-monitor.plugin.ipscanner.apiKeyFile=/run/secrets/ipscanner_api_key
       - traefik.http.middlewares.ips-monitor.plugin.ipscanner.siteId=${E2E_SITE_MONITOR}
       - traefik.http.middlewares.ips-monitor.plugin.ipscanner.trustedProxies=private
@@ -69,6 +85,7 @@ services:
       - traefik.http.routers.defaults.entrypoints=web
       - traefik.http.routers.defaults.middlewares=ips-defaults
       - traefik.http.middlewares.ips-defaults.plugin.ipscanner.apiUrl=${IPSCANNER_API_URL_DOCKER}
+      - traefik.http.middlewares.ips-defaults.plugin.ipscanner.timeout=${E2E_TIMEOUT:-1500ms}
       - traefik.http.middlewares.ips-defaults.plugin.ipscanner.trustedProxies=private
 
       # No site, enforce with local block classes.
@@ -76,6 +93,7 @@ services:
       - traefik.http.routers.local.entrypoints=web
       - traefik.http.routers.local.middlewares=ips-local
       - traefik.http.middlewares.ips-local.plugin.ipscanner.apiUrl=${IPSCANNER_API_URL_DOCKER}
+      - traefik.http.middlewares.ips-local.plugin.ipscanner.timeout=${E2E_TIMEOUT:-1500ms}
       - traefik.http.middlewares.ips-local.plugin.ipscanner.mode=enforce
       - traefik.http.middlewares.ips-local.plugin.ipscanner.blockClasses=tor,vpn
       - traefik.http.middlewares.ips-local.plugin.ipscanner.trustedProxies=private
@@ -86,6 +104,7 @@ services:
       - traefik.http.routers.untrusted.entrypoints=web
       - traefik.http.routers.untrusted.middlewares=ips-untrusted
       - traefik.http.middlewares.ips-untrusted.plugin.ipscanner.apiUrl=${IPSCANNER_API_URL_DOCKER}
+      - traefik.http.middlewares.ips-untrusted.plugin.ipscanner.timeout=${E2E_TIMEOUT:-1500ms}
       - traefik.http.middlewares.ips-untrusted.plugin.ipscanner.siteId=${E2E_SITE_ENFORCE}
       - traefik.http.middlewares.ips-untrusted.plugin.ipscanner.trustedProxies=203.0.113.0/24
 
@@ -112,7 +131,7 @@ services:
   slowapi:
     image: alpine:3.20
     container_name: ipscanner-traefik-e2e-slowapi
-    command: ["sh", "-c", "while true; do nc -l -p 8080 >/dev/null; done"]
+    command: ["nc", "-lk", "-p", "8080", "-e", "sleep", "60"]
     networks: [e2e]
 
 networks:

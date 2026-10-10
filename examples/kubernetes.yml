@@ -1,0 +1,44 @@
+# Kubernetes CRD provider. The Traefik Helm chart declares the plugin with
+#
+#   experimental:
+#     plugins:
+#       ipscanner:
+#         moduleName: github.com/ipscanner/ipscanner-traefik
+#         version: v0.1.0
+#
+# and the key comes from a Secret through urn:k8s:secret:<name>:<key>.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ipscanner
+type: Opaque
+stringData:
+  apiKey: pk_live_replace_me
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ipscanner
+spec:
+  plugin:
+    ipscanner:
+      apiKey: urn:k8s:secret:ipscanner:apiKey
+      siteId: site_xxxxxxxxxxxxxxxxxxxx
+      trustedProxies:
+        - private
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: app
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`example.com`)
+      kind: Rule
+      middlewares:
+        - name: ipscanner
+      services:
+        - name: app
+          port: 80

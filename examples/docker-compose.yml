@@ -1,0 +1,29 @@
+# Traefik with the IPScanner plugin in front of an app, configured with
+# Docker labels (the way Coolify, Dokploy and plain Compose set it up).
+#
+#   IPSCANNER_API_KEY=pk_live_... docker compose up -d
+services:
+  traefik:
+    image: traefik:v3.7
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --experimental.plugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik
+      - --experimental.plugins.ipscanner.version=v0.1.0
+    environment:
+      # Read by every ipscanner middleware without apiKey or apiKeyFile.
+      IPSCANNER_API_KEY: ${IPSCANNER_API_KEY}
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  app:
+    image: traefik/whoami:v1.11.0
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.app.rule=Host(`example.com`)
+      - traefik.http.routers.app.entrypoints=web
+      - traefik.http.routers.app.middlewares=ipscanner
+      - traefik.http.middlewares.ipscanner.plugin.ipscanner.siteId=site_xxxxxxxxxxxxxxxxxxxx

@@ -1,0 +1,33 @@
+# File provider part of the e2e setup. examples/dynamic.yml is loaded next
+# to it; the example-local router below makes Traefik build its second
+# middleware too.
+http:
+  middlewares:
+    ips-file:
+      plugin:
+        ipscanner:
+          apiUrl: http://host.docker.internal:3050
+          apiKeyFile: /run/secrets/ipscanner_api_key
+          mode: enforce
+          blockClasses:
+            - tor
+          trustedProxies:
+            - private
+          timeout: 1500ms
+          cacheTTL: 10m
+
+  routers:
+    file:
+      rule: Host(`file.localhost`)
+      entryPoints:
+        - web
+      middlewares:
+        - ips-file
+      service: app
+    example-local:
+      rule: Host(`example-local.localhost`)
+      entryPoints:
+        - web
+      middlewares:
+        - ipscanner-local
+      service: app

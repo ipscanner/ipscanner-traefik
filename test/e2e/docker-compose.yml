@@ -1,0 +1,120 @@
+# End to end setup: Traefik v3 loads the plugin from this checkout (local
+# plugin mode) and protects a whoami upstream configured with Docker labels,
+# the way Coolify does it. Started by test/e2e/run.sh, which sets the
+# variables below.
+name: ipscanner-traefik-e2e
+
+services:
+  traefik:
+    image: traefik:${TRAEFIK_VERSION:-v3.7}
+    container_name: ipscanner-traefik-e2e-proxy
+    command:
+      - --log.level=INFO
+      - --api.insecure=true
+      - --entrypoints.web.address=:80
+      # Behind a load balancer on a private network: Traefik keeps its
+      # X-Forwarded-For. The plugin decides on its own whom to trust.
+      - --entrypoints.web.forwardedheaders.trustedips=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=ipscanner-traefik-e2e
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --experimental.localplugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik
+    environment:
+      IPSCANNER_API_KEY: ${IPSCANNER_API_KEY:-}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "18080:80"
+      - "18081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../..:/plugins-local/src/github.com/ipscanner/ipscanner-traefik:ro
+      - ./dynamic.yml:/etc/traefik/dynamic/e2e.yml:ro
+      - ../../examples/dynamic.yml:/etc/traefik/dynamic/example.yml:ro
+      - ./.key:/run/secrets/ipscanner_api_key:ro
+    networks: [e2e]
+
+  whoami:
+    image: traefik/whoami:v1.11.0
+    container_name: ipscanner-traefik-e2e-whoami
+    networks:
+      e2e:
+        aliases: [app]
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.whoami.loadbalancer.server.port=80
+
+      # Dashboard site in enforce mode, key from IPSCANNER_API_KEY.
+      - traefik.http.routers.enforce.rule=Host(`enforce.localhost`)
+      - traefik.http.routers.enforce.entrypoints=web
+      - traefik.http.routers.enforce.middlewares=ips-enforce
+      - traefik.http.middlewares.ips-enforce.plugin.ipscanner.apiUrl=${IPSCANNER_API_URL_DOCKER}
+      - traefik.http.middlewares.ips-enforce.plugin.ipscanner.siteId=${E2E_SITE_ENFORCE}
+      - traefik.http.middlewares.ips-enforce.plugin.ipscanner.trustedProxies=private
+      - traefik.http.middlewares.ips-enforce.plugin.ipscanner.policyTTL=5s
+      - traefik.http.middlewares.ips-enforce.plugin.ipscanner.debug=true
+
+      # Dashboard site in monitor mode, key from a file.
+      - traefik.http.routers.monitor.rule=Host(`monitor.localhost`)
+      - traefik.http.routers.monitor.entrypoints=web
+      - traefik.http.routers.monitor.middlewares=ips-monitor
+      - traefik.http.middlewares.ips-monitor.plugin.ipscanner.apiUrl=${IPSCANNER_API_URL_DOCKER}
+      - traefik.http.middlewares.ips-monitor.plugin.ipscanner.apiKeyFile=/run/secrets/ipscanner_api_key
+      - traefik.http.middlewares.ips-monitor.plugin.ipscanner.siteId=${E2E_SITE_MONITOR}
+      - traefik.http.middlewares.ips-monitor.plugin.ipscanner.trustedProxies=private
+
+      # No site: the defaults (monitor, block malicious_automation).
+      - traefik.http.routers.defaults.rule=Host(`defaults.localhost`)
+      - traefik.http.routers.defaults.entrypoints=web
+      - traefik.http.routers.defaults.middlewares=ips-defaults
+      - traefik.http.middlewares.ips-defaults.plugin.ipscanner.apiUrl=${IPSCANNER_API_URL_DOCKER}
+      - traefik.http.middlewares.ips-defaults.plugin.ipscanner.trustedProxies=private
+
+      # No site, enforce with local block classes.
+      - traefik.http.routers.local.rule=Host(`local.localhost`)
+      - traefik.http.routers.local.entrypoints=web
+      - traefik.http.routers.local.middlewares=ips-local
+      - traefik.http.middlewares.ips-local.plugin.ipscanner.apiUrl=${IPSCANNER_API_URL_DOCKER}
+      - traefik.http.middlewares.ips-local.plugin.ipscanner.mode=enforce
+      - traefik.http.middlewares.ips-local.plugin.ipscanner.blockClasses=tor,vpn
+      - traefik.http.middlewares.ips-local.plugin.ipscanner.trustedProxies=private
+      - traefik.http.middlewares.ips-local.plugin.ipscanner.skipPaths=^/static/
+
+      # The enforce site, but only 203.0.113.0/24 is a trusted proxy.
+      - traefik.http.routers.untrusted.rule=Host(`untrusted.localhost`)
+      - traefik.http.routers.untrusted.entrypoints=web
+      - traefik.http.routers.untrusted.middlewares=ips-untrusted
+      - traefik.http.middlewares.ips-untrusted.plugin.ipscanner.apiUrl=${IPSCANNER_API_URL_DOCKER}
+      - traefik.http.middlewares.ips-untrusted.plugin.ipscanner.siteId=${E2E_SITE_ENFORCE}
+      - traefik.http.middlewares.ips-untrusted.plugin.ipscanner.trustedProxies=203.0.113.0/24
+
+      # Dead API: connection refused.
+      - traefik.http.routers.dead.rule=Host(`dead.localhost`)
+      - traefik.http.routers.dead.entrypoints=web
+      - traefik.http.routers.dead.middlewares=ips-dead
+      - traefik.http.middlewares.ips-dead.plugin.ipscanner.apiUrl=http://host.docker.internal:3999
+      - traefik.http.middlewares.ips-dead.plugin.ipscanner.mode=enforce
+      - traefik.http.middlewares.ips-dead.plugin.ipscanner.blockClasses=tor
+      - traefik.http.middlewares.ips-dead.plugin.ipscanner.trustedProxies=private
+
+      # API that never answers: timeout.
+      - traefik.http.routers.slow.rule=Host(`slow.localhost`)
+      - traefik.http.routers.slow.entrypoints=web
+      - traefik.http.routers.slow.middlewares=ips-slow
+      - traefik.http.middlewares.ips-slow.plugin.ipscanner.apiUrl=http://slowapi:8080
+      - traefik.http.middlewares.ips-slow.plugin.ipscanner.mode=enforce
+      - traefik.http.middlewares.ips-slow.plugin.ipscanner.blockClasses=tor
+      - traefik.http.middlewares.ips-slow.plugin.ipscanner.trustedProxies=private
+      - traefik.http.middlewares.ips-slow.plugin.ipscanner.timeout=500ms
+
+  # Accepts connections and never answers.
+  slowapi:
+    image: alpine:3.20
+    container_name: ipscanner-traefik-e2e-slowapi
+    command: ["sh", "-c", "while true; do nc -l -p 8080 >/dev/null; done"]
+    networks: [e2e]
+
+networks:
+  e2e:
+    name: ipscanner-traefik-e2e

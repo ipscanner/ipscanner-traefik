@@ -1,0 +1,46 @@
+# File provider dynamic configuration. The static configuration declares the
+# plugin:
+#
+#   experimental:
+#     plugins:
+#       ipscanner:
+#         moduleName: github.com/ipscanner/ipscanner-traefik
+#         version: v0.1.0
+http:
+  middlewares:
+    ipscanner:
+      plugin:
+        ipscanner:
+          apiKeyFile: /run/secrets/ipscanner_api_key
+          siteId: site_xxxxxxxxxxxxxxxxxxxx
+          trustedProxies:
+            - cloudflare
+          ipHeaders:
+            - CF-Connecting-IP
+          timeout: 1500ms
+
+    # Without a dashboard site: mode and blocked classes from here.
+    ipscanner-local:
+      plugin:
+        ipscanner:
+          apiKeyFile: /run/secrets/ipscanner_api_key
+          mode: enforce
+          blockClasses:
+            - malicious_automation
+            - tor
+          skipPaths: ^/(healthz|metrics)$
+
+  routers:
+    app:
+      rule: Host(`example.com`)
+      entryPoints:
+        - web
+      middlewares:
+        - ipscanner
+      service: app
+
+  services:
+    app:
+      loadBalancer:
+        servers:
+          - url: http://app:80

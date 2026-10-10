@@ -1,0 +1,17 @@
+displayName: IPScanner
+type: middleware
+iconPath: .assets/icon.png
+
+import: github.com/ipscanner/ipscanner-traefik
+
+summary: Checks every visitor with IPScanner and blocks bots, Tor, VPN and proxy traffic by your site policy. Monitor mode by default, fails open.
+
+testData:
+  mode: monitor
+  blockClasses:
+    - malicious_automation
+  trustedProxies:
+    - private
+  timeout: 1500ms
+  cacheTTL: 10m
+  policyTTL: 30s

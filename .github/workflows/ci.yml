@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: ["1.22", "stable"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+      - name: gofmt
+        run: test -z "$(gofmt -l $(git ls-files '*.go' | grep -v '^vendor/'))"
+      - name: vendor in sync
+        run: |
+          if grep -q '^replace' go.mod; then exit 0; fi
+          go mod vendor && git diff --exit-code -- vendor
+      - name: vet
+        run: go vet ./...
+      - name: test
+        run: go test -race ./...
+
+  yaegi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: unit tests under yaegi
+        run: sh test/yaegi/run.sh
+
+  traefik:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: load the plugin in Traefik
+        run: |
+          printf pk_test_ci > "$RUNNER_TEMP/key"
+          docker run -d --name traefik -p 8080:80 -p 8081:8080 \
+            -v "$PWD:/plugins-local/src/github.com/ipscanner/ipscanner-traefik:ro" \
+            -v "$PWD/examples/dynamic.yml:/etc/traefik/dynamic.yml:ro" \
+            -v "$RUNNER_TEMP/key:/run/secrets/ipscanner_api_key:ro" \
+            traefik:v3.7 \
+            --log.level=INFO --api.insecure=true --entrypoints.web.address=:80 \
+            --providers.file.filename=/etc/traefik/dynamic.yml \
+            --experimental.localplugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik
+          for i in $(seq 1 30); do curl -sf localhost:8081/api/http/middlewares/ipscanner@file && break; sleep 1; done
+          docker logs traefik 2>&1 | grep 'Plugins loaded'
+          curl -s localhost:8081/api/http/routers/app@file | grep -q '"status":"enabled"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: example.com' localhost:8080/)" = 502

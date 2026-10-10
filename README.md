@@ -36,12 +36,14 @@ Then add a middleware with your Site ID and put it on a router.
      - IPSCANNER_API_KEY=pk_live_...
    ```
 
-2. Your app > Configuration > Container Labels. Define the middleware and append `ipscanner` to the `middlewares` label of each router Coolify generated (`https-0-...`, `http-0-...`):
+2. Your app > Configuration > Container Labels. Define the middleware and append it to the `middlewares` label of each router Coolify generated (`https-0-...`, `http-0-...`):
 
    ```
-   traefik.http.middlewares.ipscanner.plugin.ipscanner.siteId=site_...
-   traefik.http.routers.https-0-<uuid>.middlewares=gzip,ipscanner
+   traefik.http.middlewares.ipscanner-myapp.plugin.ipscanner.siteId=site_...
+   traefik.http.routers.https-0-<uuid>.middlewares=gzip,ipscanner-myapp
    ```
+
+   Use one middleware name per app. Traefik drops a middleware that two containers define differently, and every router using it.
 
 Behind Cloudflare (orange cloud) add `trustedProxies=cloudflare` and `ipHeaders=CF-Connecting-IP` the same way.
 
@@ -177,7 +179,7 @@ IPSCANNER_KEY_FILE=/path/to/key IPSCANNER_E2E_SITE_HELPER=/path/to/site.cjs bash
 IPSCANNER_KEY_FILE=/path/to/key bash test/e2e/k8s.sh
 ```
 
-The end to end runs start Traefik in Docker with this checkout as a local plugin (`experimental.localPlugins`) on ports 18080 to 18083, and need an API on `host.docker.internal:3050` that classifies the test IPs. `k8s.sh` adds k3s and the Kubernetes CRD provider.
+The end to end runs start Traefik in Docker with this checkout as a local plugin (`experimental.localPlugins`) on ports 18080 to 18083, and need an API on `host.docker.internal:3050` (`IPSCANNER_API_URL_DOCKER`) that classifies the test IPs. `k8s.sh` adds k3s and the Kubernetes CRD provider.
 
 Dependencies are vendored (`go mod vendor`), as the Plugin Catalog requires.
 

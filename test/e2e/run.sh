@@ -1,19 +1,5 @@
 #!/usr/bin/env bash
-# End to end run: Traefik v3 in Docker loads this checkout as a local plugin
-# and protects a whoami upstream configured with Docker labels and the file
-# provider. Visitors are simulated with X-Forwarded-For from the Docker
-# gateway, which the middlewares trust (trustedProxies=private).
-#
-#   IPSCANNER_KEY_FILE=/path/to/key \
-#   IPSCANNER_E2E_SITE_HELPER=/path/to/site.cjs \
-#   bash test/e2e/run.sh
-#
-# The API must classify the test IPs (a local API with the DEV database).
-# The helper upserts a test site (`node site.cjs <site> <type> <mode>
-# '<policy>'`, printing policy_version and client_version) and prints
-# request_log rows (`node site.cjs rows <source> [n]`). KEEP=1 leaves the
-# containers running. E2E_TIMEOUT (default 1500ms) raises the plugin timeout
-# of the middlewares that need the API, for a slow test API.
+# Needs an API that classifies the test IPs (local, DEV database); KEEP=1 keeps the containers.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -38,8 +24,7 @@ HEADLESS="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)
 GOOGLEBOT="Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
 ENFORCE_POLICY='{"tor":"block","vpn":"flag","verified_bot":"block","malicious_automation":"block"}'
 
-# The key goes to a git ignored file mounted into Traefik and to the
-# environment of the Traefik container. It is never printed.
+# The key goes to a git ignored file and the container env; never print it.
 install -m 600 "$IPSCANNER_KEY_FILE" .key
 IPSCANNER_API_KEY=$(tr -d '[:space:]' < .key)
 export IPSCANNER_API_KEY
@@ -62,8 +47,7 @@ expect() { # name got want
 	if [ "$2" = "$3" ]; then ok "$1"; else bad "$1: got '$2', want '$3'"; fi
 }
 
-# visit <host> <ip|-> [ua] [path] [extra header]: sets code, took, and the
-# files $tmp/h (response headers) and $tmp/b (whoami echo of the request).
+# visit <host> <ip|-> [ua] [path] [extra header]: sets code, took, $tmp/h and $tmp/b.
 visit() {
 	local host=$1 ip=$2 ua=${3:-$CHROME} path=${4:-/} extra=${5:-X-E2E: 1}
 	local args=(-s -o "$tmp/b" -D "$tmp/h" -H "Host: $host" -A "$ua" -H "Accept-Language: en" -H "$extra" -w '%{http_code} %{time_total}\n')
@@ -84,9 +68,7 @@ helper() { # the helper, retried: the test database can be far away
 	return 1
 }
 
-# request_log rows are written in batches (about every 5 s) with
-# created_at in ms: wait for a flush, take the newest created_at as a mark,
-# then count the rows of a site created after it.
+# request_log is flushed about every 5 s, so wait before reading rows.
 FLUSH=7
 mark() {
 	sleep "$FLUSH"

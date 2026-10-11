@@ -1,6 +1,4 @@
-# File provider part of the e2e setup. examples/dynamic.yml is loaded next
-# to it; the example-local router below makes Traefik build its second
-# middleware too.
+# example-local makes Traefik build the second middleware of examples/dynamic.yml too.
 http:
   middlewares:
     ips-file:

@@ -1,7 +1,5 @@
 #!/bin/sh
-# Runs the unit tests under Yaegi with a GOPATH layout and the vendored core,
-# the way Traefik loads the plugin. YAEGI_VERSION must match the Traefik
-# release (v0.16.1 for Traefik v3.7).
+# YAEGI_VERSION must match the Traefik release (v0.16.1 for Traefik v3.7).
 set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 version=${YAEGI_VERSION:-v0.16.1}

@@ -24,13 +24,12 @@ const (
 	chrome        = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
 )
 
-// stubAPI answers the edge check and the policy endpoint like the API.
 type stubAPI struct {
 	*httptest.Server
 	mu       sync.Mutex
 	checks   int
 	policies int
-	policy   string // JSON body of the policy endpoint, "" = 404
+	policy   string // "" = 404
 	headers  http.Header
 	body     map[string]interface{}
 }
@@ -97,7 +96,6 @@ func (s *stubAPI) serve(w http.ResponseWriter, r *http.Request) {
 		class, agent, network, class == "tor" || class == "vpn")
 }
 
-// upstream records what the next handler saw.
 type upstream struct {
 	called bool
 	header http.Header
@@ -120,7 +118,6 @@ func newMiddleware(t *testing.T, c *Config) (http.Handler, *upstream) {
 	return h, next
 }
 
-// visit sends a request from a trusted local proxy on behalf of ip.
 func visit(h http.Handler, ip, path string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(http.MethodGet, "http://example.test"+path, nil)
 	r.RemoteAddr = "10.0.0.2:41000"
@@ -189,7 +186,6 @@ func TestDefaultsMonitorNeverBlocks(t *testing.T) {
 	if got := next.header.Get("X-IPScanner-Action"); got != "would_block" {
 		t.Fatalf("upstream action %q", got)
 	}
-	// No debug: the response carries no verdict.
 	if w.Header().Get("X-IPScanner-Class") != "" {
 		t.Fatal("response leaked the class without debug")
 	}
@@ -368,7 +364,6 @@ func TestIncomingHeadersStripped(t *testing.T) {
 }
 
 func TestFailOpenWithBackoff(t *testing.T) {
-	// A closed port: connection refused.
 	srv := httptest.NewServer(http.NotFoundHandler())
 	dead := srv.URL
 	srv.Close()

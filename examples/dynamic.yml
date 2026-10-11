@@ -1,11 +1,4 @@
-# File provider dynamic configuration. The static configuration declares the
-# plugin:
-#
-#   experimental:
-#     plugins:
-#       ipscanner:
-#         moduleName: github.com/ipscanner/ipscanner-traefik
-#         version: v0.1.0
+# Needs experimental.plugins.ipscanner (moduleName github.com/ipscanner/ipscanner-traefik) in the static configuration.
 http:
   middlewares:
     ipscanner:
@@ -19,7 +12,6 @@ http:
             - CF-Connecting-IP
           timeout: 1500ms
 
-    # Without a dashboard site: mode and blocked classes from here.
     ipscanner-local:
       plugin:
         ipscanner:

@@ -1,7 +1,4 @@
-# Traefik with the IPScanner plugin in front of an app, configured with
-# Docker labels (the way Coolify, Dokploy and plain Compose set it up).
-#
-#   IPSCANNER_API_KEY=pk_live_... docker compose up -d
+# IPSCANNER_API_KEY=pk_live_... docker compose up -d
 services:
   traefik:
     image: traefik:v3.7

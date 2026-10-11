@@ -1,12 +1,4 @@
-# Kubernetes CRD provider. The Traefik Helm chart declares the plugin with
-#
-#   experimental:
-#     plugins:
-#       ipscanner:
-#         moduleName: github.com/ipscanner/ipscanner-traefik
-#         version: v0.1.0
-#
-# and the key comes from a Secret through urn:k8s:secret:<name>:<key>.
+# Needs experimental.plugins.ipscanner (moduleName github.com/ipscanner/ipscanner-traefik) in the Traefik Helm chart.
 apiVersion: v1
 kind: Secret
 metadata:

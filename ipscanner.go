@@ -1,10 +1,4 @@
-// Package ipscanner_traefik is the IPScanner middleware plugin for Traefik.
-// It checks every visitor with POST /v1/edge/check, applies the site policy
-// from the IPScanner dashboard (or the local configuration), adds
-// X-IPScanner-* headers for the upstream and fails open.
-//
-// The plugin runs under Yaegi and uses the standard library and
-// github.com/ipscanner/ipscanner-edge-go only.
+// Package ipscanner_traefik is the IPScanner Traefik middleware; Yaegi loads it, so stdlib and the edge core only.
 package ipscanner_traefik //nolint:revive,stylecheck // Traefik derives the package name from the import path.
 
 import (
@@ -22,73 +16,49 @@ import (
 	edge "github.com/ipscanner/ipscanner-edge-go"
 )
 
-// Version is the plugin version, sent as User-Agent ipscanner-traefik/<Version>.
 const Version = "0.1.0"
 
-// Source is sent as X-IPScanner-Source.
 const Source = "traefik"
 
 // KeyEnv is read when neither apiKey nor apiKeyFile is set.
 const KeyEnv = "IPSCANNER_API_KEY"
 
-// Config is the plugin configuration. Durations are strings such as
-// "1500ms", "30s" or "10m". Empty values use the defaults of the core.
+// Config durations are Go duration strings; empty values use the core defaults.
 type Config struct {
-	// APIKey is the IPScanner API key. Prefer apiKeyFile or the
-	// IPSCANNER_API_KEY environment variable of the Traefik process: plugin
-	// options are visible in the Traefik dashboard and API.
-	APIKey string `json:"apiKey,omitempty" yaml:"apiKey,omitempty"`
-	// APIKeyFile is a file holding the API key, read once per configuration.
+	// APIKey shows in the Traefik dashboard and API; prefer apiKeyFile or IPSCANNER_API_KEY.
+	APIKey     string `json:"apiKey,omitempty" yaml:"apiKey,omitempty"`
 	APIKeyFile string `json:"apiKeyFile,omitempty" yaml:"apiKeyFile,omitempty"`
-	// SiteID is the dashboard site (site_...). Mode and policy then come
-	// from the dashboard.
-	SiteID string `json:"siteId,omitempty" yaml:"siteId,omitempty"`
-	// Mode is monitor or enforce. Without siteId default monitor. With
-	// siteId only monitor has an effect.
+	SiteID     string `json:"siteId,omitempty" yaml:"siteId,omitempty"`
+	// Mode is monitor or enforce; with siteId only monitor has an effect.
 	Mode string `json:"mode,omitempty" yaml:"mode,omitempty"`
-	// BlockClasses are blocked in enforce mode without siteId. Default
-	// malicious_automation.
+	// BlockClasses apply in enforce mode without siteId.
 	BlockClasses []string `json:"blockClasses,omitempty" yaml:"blockClasses,omitempty"`
-	// TrustedProxies are addresses and CIDR ranges whose IP headers are
-	// trusted, plus the keywords private and cloudflare.
+	// TrustedProxies are the only peers whose IP headers are believed (also private, cloudflare).
 	TrustedProxies []string `json:"trustedProxies,omitempty" yaml:"trustedProxies,omitempty"`
-	// IPHeaders are read in order from a trusted proxy. Default X-Forwarded-For.
-	IPHeaders []string `json:"ipHeaders,omitempty" yaml:"ipHeaders,omitempty"`
-	// Timeout is the budget for one check. Default 1500ms.
-	Timeout string `json:"timeout,omitempty" yaml:"timeout,omitempty"`
-	// CacheTTL is how long a verdict is reused per visitor. Default 10m.
-	CacheTTL string `json:"cacheTTL,omitempty" yaml:"cacheTTL,omitempty"`
-	// CacheSize bounds the verdict cache. Default 10000.
-	CacheSize int `json:"cacheSize,omitempty" yaml:"cacheSize,omitempty"`
-	// PolicyTTL is how long the site policy is reused. Default 30s.
-	PolicyTTL string `json:"policyTTL,omitempty" yaml:"policyTTL,omitempty"`
-	// SkipPaths is a case insensitive regex on the path. Default: static
-	// assets, robots.txt, sitemap.xml, favicon.ico. "none" checks every path.
-	SkipPaths string `json:"skipPaths,omitempty" yaml:"skipPaths,omitempty"`
-	// BlockMessage is the text of the 403 page.
+	IPHeaders      []string `json:"ipHeaders,omitempty" yaml:"ipHeaders,omitempty"`
+	Timeout        string   `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+	CacheTTL       string   `json:"cacheTTL,omitempty" yaml:"cacheTTL,omitempty"`
+	CacheSize      int      `json:"cacheSize,omitempty" yaml:"cacheSize,omitempty"`
+	PolicyTTL      string   `json:"policyTTL,omitempty" yaml:"policyTTL,omitempty"`
+	// SkipPaths is a case insensitive regex; "none" checks every path.
+	SkipPaths    string `json:"skipPaths,omitempty" yaml:"skipPaths,omitempty"`
 	BlockMessage string `json:"blockMessage,omitempty" yaml:"blockMessage,omitempty"`
-	// Debug adds X-IPScanner-Status, -Class and -Action to responses and
-	// logs every decision.
-	Debug bool `json:"debug,omitempty" yaml:"debug,omitempty"`
-	// APIURL is the API base URL. Default https://ipscanner.io.
+	// Debug adds X-IPScanner-Status, -Class and -Action to responses and logs every decision.
+	Debug  bool   `json:"debug,omitempty" yaml:"debug,omitempty"`
 	APIURL string `json:"apiUrl,omitempty" yaml:"apiUrl,omitempty"`
 }
 
-// CreateConfig returns the default configuration. Lists stay nil: Traefik
-// decodes into this value, and a default list would keep extra entries.
+// CreateConfig leaves lists nil: Traefik decodes into it and a default list would keep extra entries.
 func CreateConfig() *Config {
 	return &Config{}
 }
 
-// Middleware is the Traefik handler.
 type Middleware struct {
 	next  http.Handler
 	guard *edge.Guard
 }
 
-// New builds the middleware. Traefik calls it for every router that uses
-// the middleware and again on every configuration reload; guards with the
-// same configuration are shared, so the caches and the backoff survive.
+// New shares one guard per configuration, since Traefik calls it per router and on every reload.
 func New(_ context.Context, next http.Handler, config *Config, _ string) (http.Handler, error) {
 	if config == nil {
 		config = CreateConfig()
@@ -104,7 +74,6 @@ func New(_ context.Context, next http.Handler, config *Config, _ string) (http.H
 	return &Middleware{next: next, guard: guard}, nil
 }
 
-// ServeHTTP checks the visitor and passes the request on unless it is blocked.
 func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, ok := m.guard.Handle(w, r); !ok {
 		return
@@ -112,7 +81,6 @@ func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.next.ServeHTTP(w, r)
 }
 
-// edgeConfig turns the plugin options into the core configuration.
 func edgeConfig(c *Config) (edge.Config, error) {
 	key, err := apiKey(c)
 	if err != nil {
@@ -155,12 +123,11 @@ func edgeConfig(c *Config) (edge.Config, error) {
 	}, nil
 }
 
-// logLine writes one JSON line to stdout, where Traefik expects plugin logs.
+// logLine writes to stdout, where Traefik expects plugin logs.
 func logLine(line string) {
 	_, _ = os.Stdout.WriteString(line + "\n")
 }
 
-// apiKey resolves the key: apiKey, then apiKeyFile, then IPSCANNER_API_KEY.
 func apiKey(c *Config) (string, error) {
 	if key := strings.TrimSpace(c.APIKey); key != "" {
 		return key, nil
@@ -179,8 +146,6 @@ func apiKey(c *Config) (string, error) {
 	return strings.TrimSpace(os.Getenv(KeyEnv)), nil
 }
 
-// duration parses a Go duration ("1500ms", "30s", "10m"). Empty means the
-// default.
 func duration(name, value string) (time.Duration, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -193,8 +158,7 @@ func duration(name, value string) (time.Duration, error) {
 	return d, nil
 }
 
-// maxGuards bounds the shared guards. Each distinct configuration has one;
-// old ones go when a reload brings new configurations.
+// maxGuards drops the oldest guards that reloads leave behind.
 const maxGuards = 32
 
 var (
@@ -203,7 +167,6 @@ var (
 	guardsOrder []string
 )
 
-// guardFor returns the shared guard for cfg, creating it when needed.
 func guardFor(cfg edge.Config) (*edge.Guard, error) {
 	id := configID(cfg)
 	guardsMu.Lock()
@@ -224,8 +187,7 @@ func guardFor(cfg edge.Config) (*edge.Guard, error) {
 	return g, nil
 }
 
-// configID identifies a configuration without keeping the key in memory
-// twice in clear text.
+// configID hashes the config so the key is not kept twice in clear text.
 func configID(c edge.Config) string {
 	parts := []string{
 		c.APIKey, c.APIURL, c.SiteID, c.Mode,

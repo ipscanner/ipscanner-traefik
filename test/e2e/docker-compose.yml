@@ -1,7 +1,4 @@
-# End to end setup: Traefik v3 loads the plugin from this checkout (local
-# plugin mode) and protects a whoami upstream configured with Docker labels,
-# the way Coolify does it. Started by test/e2e/run.sh, which sets the
-# variables below.
+# Started by run.sh, which sets the variables below.
 name: ipscanner-traefik-e2e
 
 services:
@@ -12,8 +9,7 @@ services:
       - --log.level=INFO
       - --api.insecure=true
       - --entrypoints.web.address=:80
-      # Behind a load balancer on a private network: Traefik keeps its
-      # X-Forwarded-For. The plugin decides on its own whom to trust.
+      # Traefik keeps X-Forwarded-For; the plugin decides on its own whom to trust.
       - --entrypoints.web.forwardedheaders.trustedips=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
@@ -47,7 +43,6 @@ services:
       - traefik.enable=true
       - traefik.http.services.whoami.loadbalancer.server.port=80
 
-      # Dashboard site in enforce mode, key from IPSCANNER_API_KEY.
       - traefik.http.routers.enforce.rule=Host(`enforce.localhost`)
       - traefik.http.routers.enforce.entrypoints=web
       - traefik.http.routers.enforce.middlewares=ips-enforce
@@ -58,8 +53,7 @@ services:
       - traefik.http.middlewares.ips-enforce.plugin.ipscanner.policyTTL=5s
       - traefik.http.middlewares.ips-enforce.plugin.ipscanner.debug=true
 
-      # Coolify: its generated router and gzip middleware, plus the two
-      # labels from the README (apiUrl and trustedProxies for the test).
+      # Coolify's generated router and gzip middleware plus the README labels.
       - traefik.http.middlewares.gzip.compress=true
       - traefik.http.routers.https-0-e2ecoolify.rule=Host(`coolify.localhost`) && PathPrefix(`/`)
       - traefik.http.routers.https-0-e2ecoolify.entrypoints=web
@@ -70,7 +64,6 @@ services:
       - traefik.http.middlewares.ipscanner-myapp.plugin.ipscanner.timeout=${E2E_TIMEOUT:-1500ms}
       - traefik.http.middlewares.ipscanner-myapp.plugin.ipscanner.trustedProxies=private
 
-      # Dashboard site in monitor mode, key from a file.
       - traefik.http.routers.monitor.rule=Host(`monitor.localhost`)
       - traefik.http.routers.monitor.entrypoints=web
       - traefik.http.routers.monitor.middlewares=ips-monitor
@@ -80,7 +73,6 @@ services:
       - traefik.http.middlewares.ips-monitor.plugin.ipscanner.siteId=${E2E_SITE_MONITOR}
       - traefik.http.middlewares.ips-monitor.plugin.ipscanner.trustedProxies=private
 
-      # No site: the defaults (monitor, block malicious_automation).
       - traefik.http.routers.defaults.rule=Host(`defaults.localhost`)
       - traefik.http.routers.defaults.entrypoints=web
       - traefik.http.routers.defaults.middlewares=ips-defaults
@@ -88,7 +80,6 @@ services:
       - traefik.http.middlewares.ips-defaults.plugin.ipscanner.timeout=${E2E_TIMEOUT:-1500ms}
       - traefik.http.middlewares.ips-defaults.plugin.ipscanner.trustedProxies=private
 
-      # No site, enforce with local block classes.
       - traefik.http.routers.local.rule=Host(`local.localhost`)
       - traefik.http.routers.local.entrypoints=web
       - traefik.http.routers.local.middlewares=ips-local
@@ -99,7 +90,6 @@ services:
       - traefik.http.middlewares.ips-local.plugin.ipscanner.trustedProxies=private
       - traefik.http.middlewares.ips-local.plugin.ipscanner.skipPaths=^/static/
 
-      # The enforce site, but only 203.0.113.0/24 is a trusted proxy.
       - traefik.http.routers.untrusted.rule=Host(`untrusted.localhost`)
       - traefik.http.routers.untrusted.entrypoints=web
       - traefik.http.routers.untrusted.middlewares=ips-untrusted
@@ -108,7 +98,6 @@ services:
       - traefik.http.middlewares.ips-untrusted.plugin.ipscanner.siteId=${E2E_SITE_ENFORCE}
       - traefik.http.middlewares.ips-untrusted.plugin.ipscanner.trustedProxies=203.0.113.0/24
 
-      # Dead API: connection refused.
       - traefik.http.routers.dead.rule=Host(`dead.localhost`)
       - traefik.http.routers.dead.entrypoints=web
       - traefik.http.routers.dead.middlewares=ips-dead
@@ -117,7 +106,6 @@ services:
       - traefik.http.middlewares.ips-dead.plugin.ipscanner.blockClasses=tor
       - traefik.http.middlewares.ips-dead.plugin.ipscanner.trustedProxies=private
 
-      # API that never answers: timeout.
       - traefik.http.routers.slow.rule=Host(`slow.localhost`)
       - traefik.http.routers.slow.entrypoints=web
       - traefik.http.routers.slow.middlewares=ips-slow

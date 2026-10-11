@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Kubernetes CRD run: k3s in Docker with the Traefik v3 CRDs, then a Traefik
-# container with the kubernetescrd provider and this checkout as a local
-# plugin. Checks that examples/kubernetes.yml is accepted by the API server
-# and that a Middleware reading the key from a Secret
-# (urn:k8s:secret:...) blocks and passes visitors.
-#
-#   IPSCANNER_KEY_FILE=/path/to/key bash test/e2e/k8s.sh
-#
 # KEEP=1 leaves the containers running.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -120,8 +112,7 @@ docker exec "$K3S" cat /var/lib/rancher/k3s/server/tls/server-ca.crt >"$tmp/ca.c
 printf '%s' "$token" >"$tmp/token"
 chmod 644 "$tmp/ca.crt" "$tmp/token"
 
-# The token is read from a file inside the container, so it does not show
-# in `docker inspect`.
+# The token is read from a file so it does not show in `docker inspect`.
 docker run -d --name "$PROXY" --network "$NET" --add-host host.docker.internal:host-gateway \
 	-p 18082:80 -p 18083:8080 \
 	-v "$root:/plugins-local/src/github.com/ipscanner/ipscanner-traefik:ro" \

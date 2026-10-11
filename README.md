@@ -2,8 +2,6 @@
 
 Traefik middleware plugin that checks every visitor with [IPScanner](https://ipscanner.io) and blocks bots, Tor, VPN and proxy traffic by your site policy from the [dashboard](https://ipscanner.io/dashboard/sites).
 
-It makes the same edge check as the [Cloudflare Worker](https://github.com/ipscanner/ipscanner-cloudflare) and the [WordPress plugin](https://github.com/ipscanner/ipscanner-wordpress) (`POST /v1/edge/check`, 2 request units per uncached visitor). Monitor mode by default, fails open. Tested with Traefik v3.7.
-
 ## Install
 
 Declare the plugin in the static configuration:

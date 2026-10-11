@@ -1,9 +1,4 @@
-// Package edge is the shared core of the IPScanner proxy integrations
-// (Traefik, Caddy, forward auth). It checks a visitor with
-// POST /v1/edge/check, applies the site policy from
-// GET /v1/sites/{id}/policy or the local configuration, and fails open.
-//
-// The package uses the standard library only and runs under Yaegi.
+// Package edge is the fail-open core of the IPScanner proxy integrations; stdlib only, so it runs under Yaegi.
 package edge
 
 import (
@@ -15,23 +10,19 @@ import (
 	"time"
 )
 
-// Version is the version of this package.
 const Version = "0.1.0"
 
-// Modes.
 const (
 	ModeMonitor = "monitor"
 	ModeEnforce = "enforce"
 )
 
-// Actions a policy assigns to a traffic class.
 const (
 	ActionAllow = "allow"
 	ActionFlag  = "flag"
 	ActionBlock = "block"
 )
 
-// Statuses of a check (Decision.Status, header X-IPScanner-Status).
 const (
 	StatusOK      = "ok"
 	StatusError   = "error"
@@ -40,7 +31,6 @@ const (
 	StatusSkipped = "skipped"
 )
 
-// Traffic classes returned by the edge check.
 const (
 	ClassHuman               = "human"
 	ClassVerifiedBot         = "verified_bot"
@@ -53,33 +43,28 @@ const (
 	ClassRelay               = "relay"
 )
 
-// Classes lists every traffic class.
 var Classes = []string{
 	ClassHuman, ClassVerifiedBot, ClassAIAgent, ClassMaliciousAutomation,
 	ClassTor, ClassVPN, ClassProxy, ClassHosting, ClassRelay,
 }
 
-// BlockableClasses are the classes Config.BlockClasses accepts.
 var BlockableClasses = []string{
 	ClassMaliciousAutomation, ClassAIAgent, ClassTor, ClassVPN,
 	ClassProxy, ClassHosting, ClassRelay,
 }
 
-// Defaults.
 const (
 	DefaultAPIURL    = "https://ipscanner.io"
 	DefaultTimeout   = 1500 * time.Millisecond
 	DefaultCacheTTL  = 10 * time.Minute
 	DefaultPolicyTTL = 30 * time.Second
 	DefaultCacheSize = 10000
-	// DefaultSkipPaths is the Cloudflare Worker's SKIP_PATHS default:
-	// robots.txt, sitemap.xml, favicon.ico and static assets.
-	DefaultSkipPaths = `^/(robots\.txt|sitemap\.xml|favicon\.ico)$|\.(css|js|mjs|map|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|eot|mp4|webm)$`
-	// DefaultBlockMessage is the text of the block page.
+	// DefaultSkipPaths matches the Cloudflare Worker's SKIP_PATHS default.
+	DefaultSkipPaths    = `^/(robots\.txt|sitemap\.xml|favicon\.ico)$|\.(css|js|mjs|map|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|eot|mp4|webm)$`
 	DefaultBlockMessage = "Blocked by IPScanner edge guard."
 )
 
-// Fixed timings, the same as the WordPress plugin and the Worker.
+// Keep in sync with the WordPress plugin and the Worker.
 const (
 	policyStale      = 24 * time.Hour
 	policyRetryGap   = 5 * time.Second
@@ -91,66 +76,39 @@ const (
 // None turns off SkipPaths or BlockClasses.
 const None = "none"
 
-// Config configures a Guard. The zero value of every field is a usable
-// default except APIKey: without a key every request passes unchecked.
+// Config zero values are defaults; without APIKey every request passes unchecked.
 type Config struct {
-	// APIKey is the IPScanner API key (pk_live_... or pk_test_...).
 	APIKey string
-	// APIURL is the API base URL. Default https://ipscanner.io.
 	APIURL string
-	// SiteID is the dashboard site (site_...). When set, mode and per class
-	// policy come from the dashboard.
+	// SiteID makes mode and per class policy come from the dashboard.
 	SiteID string
-	// Mode is monitor or enforce. Without SiteID it decides whether blocked
-	// classes get a 403 (default monitor). With SiteID, "monitor" keeps the
-	// guard in monitor mode whatever the dashboard says; other values follow
-	// the dashboard.
+	// Mode "monitor" overrides the dashboard; any other value follows it when SiteID is set.
 	Mode string
-	// BlockClasses are blocked in enforce mode without SiteID. Default
-	// malicious_automation. "none" blocks nothing. The network class counts
-	// too: blocking vpn also blocks a bot on a VPN.
+	// BlockClasses apply without SiteID and match the network class too (vpn blocks a bot on a VPN).
 	BlockClasses []string
-	// TrustedProxies are addresses or CIDR ranges whose IP headers are
-	// trusted. "private" adds the private and loopback ranges, "cloudflare"
-	// the Cloudflare edge ranges. Default none: the peer address is used.
+	// TrustedProxies are the only peers whose IP headers are believed (also "private", "cloudflare").
 	TrustedProxies []string
-	// IPHeaders are read, in order, when the peer is a trusted proxy.
-	// Default X-Forwarded-For.
-	IPHeaders []string
-	// Timeout is the budget for one check, verdict and policy together.
-	// Default 1.5s. On timeout the request passes.
-	Timeout time.Duration
-	// CacheTTL is how long a verdict is reused per site, IP and user agent.
-	// Default 10m.
-	CacheTTL time.Duration
-	// CacheSize bounds the verdict cache. Default 10000 entries.
+	IPHeaders      []string
+	// Timeout covers verdict and policy together; on timeout the request passes.
+	Timeout   time.Duration
+	CacheTTL  time.Duration
 	CacheSize int
-	// PolicyTTL is how long a site policy is reused. Default 30s.
 	PolicyTTL time.Duration
-	// SkipPaths is a case insensitive regular expression on the path.
-	// Matching requests are not checked. Default DefaultSkipPaths, "none"
-	// checks every path.
+	// SkipPaths is a case insensitive regexp; "none" checks every path.
 	SkipPaths string
-	// Source is sent as X-IPScanner-Source (traefik, caddy, forward_auth).
+	// Source is sent as X-IPScanner-Source.
 	Source string
 	// Client and Version make the User-Agent ipscanner-<Client>/<Version>.
-	// Default ipscanner-edge-go/<package version>.
-	Client  string
-	Version string
-	// BlockMessage is the text of the 403 page. Default DefaultBlockMessage.
+	Client       string
+	Version      string
 	BlockMessage string
-	// Debug adds X-IPScanner-Status, -Class and -Action to responses and
-	// logs every decision.
-	Debug bool
-	// HTTPClient makes the API calls. Default: a client that does not
-	// follow redirects.
+	// Debug adds X-IPScanner-Status, -Class and -Action to responses and logs every decision.
+	Debug      bool
 	HTTPClient *http.Client
-	// Logger receives one JSON line per failure (and per decision with
-	// Debug). Default: the standard logger.
+	// Logger receives one JSON line per failure, and per decision with Debug.
 	Logger func(line string)
 }
 
-// DefaultConfig returns a Config with every default filled in.
 func DefaultConfig() Config {
 	return Config{
 		APIURL:       DefaultAPIURL,
@@ -166,14 +124,13 @@ func DefaultConfig() Config {
 	}
 }
 
-// settings is a validated Config.
 type settings struct {
 	apiKey       string
 	apiURL       string
 	siteID       string
-	mode         string // "", monitor or enforce, as configured
+	mode         string
 	block        map[string]bool
-	local        map[string]string // block as a policy: class -> block
+	local        map[string]string
 	trusted      []ipRange
 	ipHeaders    []string
 	timeout      time.Duration
@@ -187,8 +144,6 @@ type settings struct {
 	debug        bool
 }
 
-// splitList splits every entry on commas and trims it, so "tor, vpn" and
-// ["tor", "vpn"] mean the same.
 func splitList(in []string) []string {
 	var out []string
 	for _, entry := range in {

@@ -12,9 +12,7 @@ import (
 	"strconv"
 )
 
-// Verdict is the POST /v1/edge/check answer. Agent and Network are nil when
-// that half did not answer in time; Site is nil without a site, or for one
-// that is unknown or on another account.
+// Verdict is the POST /v1/edge/check answer; Agent, Network and Site are nil when missing.
 type Verdict struct {
 	Class    string   `json:"class"`
 	Agent    *Agent   `json:"agent"`
@@ -31,7 +29,6 @@ type Agent struct {
 	Signals    map[string]interface{} `json:"signals"`
 }
 
-// Network is the IP half of a verdict.
 type Network struct {
 	NetworkClass string   `json:"networkClass"`
 	Anonymized   bool     `json:"anonymized"`
@@ -42,21 +39,18 @@ type Network struct {
 	ASNName      string   `json:"asnName,omitempty"`
 }
 
-// SiteRef is the site a verdict was attributed to.
 type SiteRef struct {
 	ID            string `json:"id"`
 	Mode          string `json:"mode"`
 	PolicyVersion int    `json:"policyVersion"`
 }
 
-// Policy is a site's dashboard policy.
 type Policy struct {
 	Mode    string
 	Actions map[string]string
 	Version int
 }
 
-// checkBody is the edge check request, the same fields the Worker sends.
 type checkBody struct {
 	Site      string            `json:"site,omitempty"`
 	IP        string            `json:"ip"`
@@ -72,8 +66,6 @@ type policyBody struct {
 	Version int               `json:"version"`
 }
 
-// apiResult is one API call: the HTTP status (0 when none) and the status
-// the guard reports.
 type apiResult struct {
 	code   int
 	body   []byte
@@ -83,9 +75,7 @@ type apiResult struct {
 
 const maxBody = 1 << 20
 
-// defaultHTTPClient does not follow redirects and keeps more idle
-// connections to the API than the default transport (2), since a proxy calls
-// it from many goroutines.
+// defaultHTTPClient never follows redirects.
 func defaultHTTPClient() *http.Client {
 	var transport http.RoundTripper = http.DefaultTransport
 	if t, ok := http.DefaultTransport.(*http.Transport); ok {
@@ -147,7 +137,6 @@ func failureStatus(ctx context.Context, err error) string {
 	if ctx.Err() == context.DeadlineExceeded || errors.Is(err, context.DeadlineExceeded) {
 		return StatusTimeout
 	}
-	// *url.Error, what http.Client.Do returns, is a net.Error.
 	if ne, ok := err.(net.Error); ok && ne.Timeout() {
 		return StatusTimeout
 	}
@@ -189,7 +178,6 @@ func (g *Guard) getPolicy(ctx context.Context) (*Policy, apiResult) {
 	return toPolicy(body), res
 }
 
-// toPolicy keeps known classes and actions only.
 func toPolicy(b policyBody) *Policy {
 	p := &Policy{Mode: ModeMonitor, Actions: map[string]string{}, Version: b.Version}
 	if b.Mode == ModeEnforce {

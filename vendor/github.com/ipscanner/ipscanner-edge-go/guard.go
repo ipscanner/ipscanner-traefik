@@ -14,9 +14,7 @@ import (
 	"time"
 )
 
-// Guard checks visitors. It is safe for concurrent use; create one per
-// configuration and keep it for the life of the process, since the verdict
-// cache, the policy cache and the backoff live in it.
+// Guard is safe for concurrent use; keep one per configuration, it holds the caches and the backoff.
 type Guard struct {
 	s     settings
 	http  *http.Client
@@ -38,8 +36,7 @@ type Guard struct {
 	policyFlight chan struct{}
 }
 
-// flight is one edge check in progress. Concurrent requests from the same
-// visitor wait for it instead of calling the API again.
+// flight lets concurrent requests from one visitor share a single API call.
 type flight struct {
 	done    chan struct{}
 	verdict *Verdict
@@ -51,25 +48,18 @@ type policyEntry struct {
 	fetchedAt time.Time
 }
 
-// Visitor is what a check needs from a request.
 type Visitor struct {
-	// IP is the visitor's address, usually Guard.ClientIP.
 	IP        string
 	UserAgent string
-	// Method and Path decide whether the request is skipped.
-	Method string
-	Path   string
-	// JA4 is the TLS fingerprint when the proxy knows it.
-	JA4 string
-	// RequestID is sent with the check and shown on the block page.
-	// Generated when empty.
+	Method    string
+	Path      string
+	JA4       string
+	// RequestID is generated when empty.
 	RequestID string
-	// Headers are the signal headers sent to the API, see SignalHeaders.
-	Headers map[string]string
+	Headers   map[string]string
 }
 
-// New validates the configuration and returns a Guard. Without an API key
-// the Guard passes every request through with status "skipped".
+// New returns a Guard that, without an API key, passes every request with status skipped.
 func New(cfg Config) (*Guard, error) {
 	s, err := validate(cfg)
 	if err != nil {
@@ -95,16 +85,13 @@ func New(cfg Config) (*Guard, error) {
 	return g, nil
 }
 
-// Enabled reports whether an API key is configured.
+// Enabled reports whether an API key is set.
 func (g *Guard) Enabled() bool { return g.s.apiKey != "" }
 
-// Debug reports whether Config.Debug is on.
 func (g *Guard) Debug() bool { return g.s.debug }
 
-// SiteID is the configured site, or "".
 func (g *Guard) SiteID() string { return g.s.siteID }
 
-// UserAgent is the User-Agent the guard sends to the API.
 func (g *Guard) UserAgent() string { return g.s.userAgent }
 
 func (g *Guard) logJSON(fields map[string]interface{}) {
@@ -115,8 +102,6 @@ func (g *Guard) logJSON(fields map[string]interface{}) {
 	g.log(string(line))
 }
 
-// VisitorFrom reads a Visitor from a request: user agent, method, path,
-// signal headers and an X-Request-Id when it looks like one.
 func VisitorFrom(r *http.Request, ip string) Visitor {
 	v := Visitor{
 		IP:        ip,
@@ -133,9 +118,7 @@ func VisitorFrom(r *http.Request, ip string) Visitor {
 	return v
 }
 
-// SignalHeaders are the request headers the edge check reads: Accept,
-// Accept-Language, Accept-Encoding, Sec-CH-UA* and Sec-Fetch-*, with
-// lower case names and values cut to 512 bytes.
+// SignalHeaders keeps Accept*, Sec-CH-UA* and Sec-Fetch-* with lower case names and values cut to 512 bytes.
 func SignalHeaders(h http.Header) map[string]string {
 	out := map[string]string{}
 	for name, values := range h {
@@ -154,11 +137,9 @@ func SignalHeaders(h http.Header) map[string]string {
 	return out
 }
 
-// HeaderPrefix starts every header the guard sets.
 const HeaderPrefix = "X-Ipscanner-"
 
-// StripHeaders removes incoming X-IPScanner-* headers, so a client cannot
-// send a verdict of its own to the upstream.
+// StripHeaders drops incoming X-IPScanner-* headers so a client cannot forge a verdict upstream.
 func StripHeaders(h http.Header) {
 	var drop []string
 	for name := range h {
@@ -171,17 +152,12 @@ func StripHeaders(h http.Header) {
 	}
 }
 
-// Check checks the visitor of r at ip. It never fails: on a timeout, an
-// error or during backoff the request is allowed and Status says why.
+// Check never fails: on timeout, error or backoff the request is allowed and Status says why.
 func (g *Guard) Check(ctx context.Context, r *http.Request, ip string) Decision {
 	return g.CheckVisitor(ctx, VisitorFrom(r, ip))
 }
 
-// Handle is the whole middleware step: it strips incoming X-IPScanner-*
-// headers, resolves the client IP, checks it, adds the verdict headers to r
-// for the upstream (and the debug headers to w with Debug), and writes the
-// block page when the visitor is blocked. It returns false when the request
-// must not continue.
+// Handle is the whole middleware step; it returns false after writing the block page.
 func (g *Guard) Handle(w http.ResponseWriter, r *http.Request) (Decision, bool) {
 	StripHeaders(r.Header)
 	d := g.Check(r.Context(), r, g.ClientIP(r))
@@ -200,7 +176,6 @@ func (g *Guard) Handle(w http.ResponseWriter, r *http.Request) (Decision, bool) 
 	return d, true
 }
 
-// CheckVisitor checks one visitor. Like Check it never fails.
 func (g *Guard) CheckVisitor(ctx context.Context, v Visitor) Decision {
 	v.IP = normalizeIP(v.IP)
 	d := Decision{
@@ -225,8 +200,6 @@ func (g *Guard) CheckVisitor(ctx context.Context, v Visitor) Decision {
 	}
 	d.RequestID = v.RequestID
 
-	// One budget for the whole check: the verdict and the policy load in
-	// parallel and both give up at Timeout.
 	ctx, cancel := context.WithTimeout(ctx, g.s.timeout)
 	defer cancel()
 
@@ -263,8 +236,6 @@ func (g *Guard) CheckVisitor(ctx context.Context, v Visitor) Decision {
 		return d
 	}
 
-	// A verdict that saw a newer policy version refreshes the policy, at
-	// most every few seconds (the WordPress plugin does the same).
 	if g.s.siteID != "" && verdict.Site != nil && verdict.Site.PolicyVersion > policyVersion(policy) {
 		policy, source = g.sitePolicy(ctx, verdict.Site.PolicyVersion)
 	}
@@ -351,8 +322,6 @@ func newRequestID() string {
 	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
 }
 
-// lookup returns a cached verdict, or StatusBackoff while checks are
-// paused, or neither.
 func (g *Guard) lookup(key string) (*Verdict, string) {
 	now := g.now()
 	if v := g.cache.get(key, now); v != nil {
@@ -366,9 +335,7 @@ func (g *Guard) lookup(key string) (*Verdict, string) {
 	return nil, ""
 }
 
-// await joins or starts the edge check for key and waits for it or ctx.
-// The call itself runs detached with its own Timeout, so a slow answer is
-// still cached for the next request.
+// await runs the call detached with its own timeout, so a slow answer is still cached.
 func (g *Guard) await(ctx context.Context, key string, v Visitor) (*Verdict, string) {
 	g.mu.Lock()
 	f := g.flights[key]
@@ -417,9 +384,7 @@ func (g *Guard) runCheck(key string, f *flight, v Visitor) {
 	g.fail(res)
 }
 
-// fail pauses checks after a failed edge check, so a slow or unreachable
-// API does not add the timeout to every request: 30 seconds, 5 minutes on
-// 401, 402, 403 or 429. A 400 concerns one visitor and pauses nothing.
+// fail backs off 30s, or 5m on 401/402/403/429; a 400 concerns one visitor and pauses nothing.
 func (g *Guard) fail(res apiResult) {
 	pause := backoffError
 	switch res.code {
@@ -449,11 +414,7 @@ func (g *Guard) fail(res apiResult) {
 	})
 }
 
-// sitePolicy returns the dashboard policy. Fresh for PolicyTTL; when a
-// refresh fails the last policy is used for up to 24 hours and the next
-// attempt waits a few seconds. A 404 means the site has no policy.
-// minVersion forces a refresh when the cached policy is older, at most every
-// 5 seconds.
+// sitePolicy falls back to the last policy for 24h on failure; minVersion forces a refresh at most every 5s.
 func (g *Guard) sitePolicy(ctx context.Context, minVersion int) (*Policy, string) {
 	g.pmu.Lock()
 	now := g.now()
@@ -502,7 +463,7 @@ func sourceOf(p *Policy, source string) string {
 	return source
 }
 
-// stalePolicy is the last policy younger than 24 hours. Callers hold pmu.
+// stalePolicy requires pmu held.
 func (g *Guard) stalePolicy(now time.Time) (*Policy, string) {
 	if e := g.policy; e != nil && e.policy != nil && now.Sub(e.fetchedAt) < policyStale {
 		return e.policy, "stale"
@@ -558,24 +519,20 @@ func (g *Guard) fetchPolicy(ch chan struct{}) {
 	}
 }
 
-// State is a snapshot of the guard for health checks.
 type State struct {
-	Enabled bool
-	SiteID  string
-	// BackoffUntil is when checks resume after a failure (zero when none).
+	Enabled      bool
+	SiteID       string
 	BackoffUntil time.Time
 	// LastStatus, LastCode and LastError describe the last failed edge check.
-	LastStatus  string
-	LastCode    int
-	LastError   string
-	LastErrorAt time.Time
-	// Policy is the cached site policy, nil when none.
+	LastStatus      string
+	LastCode        int
+	LastError       string
+	LastErrorAt     time.Time
 	Policy          *Policy
 	PolicyFetchedAt time.Time
 	CachedVerdicts  int
 }
 
-// State returns a snapshot of the guard.
 func (g *Guard) State() State {
 	st := State{Enabled: g.Enabled(), SiteID: g.s.siteID, CachedVerdicts: g.cache.len()}
 	g.mu.Lock()

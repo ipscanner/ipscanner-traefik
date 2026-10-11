@@ -2,8 +2,6 @@
 
 Shared Go core of the [IPScanner](https://ipscanner.io) proxy integrations: the Traefik plugin, the Caddy module and the forward auth gate. It checks a visitor with `POST /v1/edge/check`, applies the site policy from the [dashboard](https://ipscanner.io/dashboard/sites) or the local configuration, and fails open.
 
-It behaves like the [Cloudflare Worker](https://github.com/ipscanner/ipscanner-cloudflare) and the [WordPress plugin](https://github.com/ipscanner/ipscanner-wordpress). Standard library only, runs under [Yaegi](https://github.com/traefik/yaegi).
-
 ## Install
 
 ```sh

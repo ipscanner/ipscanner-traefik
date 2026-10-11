@@ -7,8 +7,7 @@ import (
 	"strings"
 )
 
-// cloudflareRanges are the Cloudflare edge ranges from
-// https://www.cloudflare.com/ips/ (same list as the WordPress plugin).
+// cloudflareRanges mirrors https://www.cloudflare.com/ips/ and the WordPress plugin.
 var cloudflareRanges = []string{
 	"173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
 	"141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
@@ -18,8 +17,6 @@ var cloudflareRanges = []string{
 	"2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
 }
 
-// privateRanges are the private, loopback and unique local ranges, where a
-// proxy in the same network or on the same host lives.
 var privateRanges = []string{
 	"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
 	"::1/128", "fc00::/7",
@@ -29,8 +26,6 @@ type ipRange struct {
 	net *net.IPNet
 }
 
-// parseRanges parses addresses, CIDR ranges and the keywords "private" and
-// "cloudflare".
 func parseRanges(entries []string) ([]ipRange, error) {
 	var out []ipRange
 	for _, entry := range entries {
@@ -78,9 +73,7 @@ func inRanges(ip string, ranges []ipRange) bool {
 	return false
 }
 
-// normalizeIP returns the address in canonical form, or "" when the value is
-// not an IP. It accepts "1.2.3.4:80" and "[2001:db8::1]:443" as sent by some
-// proxies, and turns IPv4-mapped IPv6 into IPv4.
+// normalizeIP accepts host:port forms some proxies send and maps IPv4-mapped IPv6 to IPv4.
 func normalizeIP(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -108,8 +101,6 @@ func normalizeIP(value string) string {
 	return ip.String()
 }
 
-// isPublic reports whether the address is routable on the internet. Private,
-// loopback, link local and unspecified addresses are never checked.
 func isPublic(ip string) bool {
 	parsed := net.ParseIP(ip)
 	if parsed == nil {
@@ -123,7 +114,6 @@ func isPublic(ip string) bool {
 	return true
 }
 
-// remoteIP is the peer address of the request.
 func remoteIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -132,17 +122,12 @@ func remoteIP(r *http.Request) string {
 	return normalizeIP(host)
 }
 
-// ClientIP returns the visitor's address. IP headers are read only when the
-// peer (RemoteAddr) is a trusted proxy, so visitors cannot spoof them. In an
-// X-Forwarded-For chain the nearest hop that is not a trusted proxy is the
-// visitor. Returns "" when no valid address is known.
+// ClientIP reads IP headers only from a trusted peer, so visitors cannot spoof them.
 func (g *Guard) ClientIP(r *http.Request) string {
 	return clientIP(r, g.s.trusted, g.s.ipHeaders)
 }
 
-// TrustedPeer reports whether the peer (RemoteAddr) of r is a trusted proxy,
-// so headers it sets, such as X-Forwarded-Uri in a forward auth request, can
-// be believed.
+// TrustedPeer reports whether RemoteAddr is a trusted proxy whose headers can be believed.
 func (g *Guard) TrustedPeer(r *http.Request) bool {
 	remote := remoteIP(r)
 	return remote != "" && inRanges(remote, g.s.trusted)
@@ -167,10 +152,7 @@ func clientIP(r *http.Request, trusted []ipRange, headers []string) string {
 	return remote
 }
 
-// walkChain walks the chain from the nearest hop back. The first hop that is
-// not a trusted proxy is the visitor. An invalid hop stops the walk: the
-// last valid hop (or the peer) is used, since anything before it is not
-// vouched for.
+// walkChain stops at an invalid hop, since nothing before it is vouched for.
 func walkChain(chain []string, trusted []ipRange, remote string) string {
 	first := ""
 	for i := len(chain) - 1; i >= 0; i-- {

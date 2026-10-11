@@ -6,42 +6,28 @@ import (
 	"strconv"
 )
 
-// Decision is the outcome of a check.
 type Decision struct {
-	// Status is ok, error, timeout, backoff or skipped. Anything but ok
-	// means the request passes unchecked (fail open).
+	// Status other than ok means the request passed unchecked (fail open).
 	Status string
-	// Class is the traffic class, "" when Status is not ok.
-	Class string
-	// Action is what to do with the request: allow, flag or block. It is
-	// allow in monitor mode whatever the policy says.
+	Class  string
+	// Action is always allow in monitor mode.
 	Action string
-	// Outcome is the policy result: allow, flag, block, or would_flag and
-	// would_block in monitor mode.
+	// Outcome is the policy result, would_flag or would_block in monitor mode.
 	Outcome string
-	// Mode is monitor or enforce, "" when Status is not ok.
-	Mode string
-	// Site is the configured site, or "".
-	Site string
-	// PolicyVersion and PolicySource (cache, fetch, stale, none, or config
-	// without a site) describe the policy that was applied.
+	Mode    string
+	Site    string
+	// PolicySource is cache, fetch, stale, none, or config without a site.
 	PolicyVersion int
 	PolicySource  string
-	// Cached is true when the verdict came from the cache (no API call).
-	Cached bool
-	// IP is the visitor address that was checked.
-	IP string
-	// RequestID was sent with the check and is shown on the block page.
-	RequestID string
-	// Verdict is the API answer, nil when Status is not ok.
-	Verdict *Verdict
+	Cached        bool
+	IP            string
+	RequestID     string
+	Verdict       *Verdict
 }
 
-// Blocked reports whether the request must get the block page.
 func (d Decision) Blocked() bool { return d.Action == ActionBlock }
 
-// Headers are the X-IPScanner-* headers for the upstream request. When the
-// check failed or was skipped only X-IPScanner-Status is set.
+// Headers are the upstream X-IPScanner-* headers; only Status unless the check succeeded.
 func (d Decision) Headers() map[string]string {
 	h := map[string]string{"X-IPScanner-Status": d.Status}
 	if d.Status != StatusOK || d.Verdict == nil {
@@ -82,8 +68,6 @@ func (d Decision) Headers() map[string]string {
 	return h
 }
 
-// DebugHeaders are the headers added to the response with Config.Debug:
-// X-IPScanner-Status, -Class and -Action.
 func (d Decision) DebugHeaders() map[string]string {
 	h := map[string]string{"X-IPScanner-Status": d.Status}
 	if d.Class != "" {
@@ -95,8 +79,6 @@ func (d Decision) DebugHeaders() map[string]string {
 	return h
 }
 
-// isVerified reports whether the visitor is a verified crawler. Verified
-// crawlers always pass.
 func isVerified(v *Verdict) bool {
 	if v.Class == ClassVerifiedBot {
 		return true
@@ -109,7 +91,6 @@ func isVerified(v *Verdict) bool {
 	return false
 }
 
-// networkTrafficClass is the traffic class a network class implies, or "".
 func networkTrafficClass(networkClass string) string {
 	switch networkClass {
 	case "tor":
@@ -136,10 +117,7 @@ func rank(action string) int {
 	return 0
 }
 
-// decide maps a verdict to a class and the policy action for it. With
-// matchNetwork the network class counts too, so a bot on a VPN is blocked
-// when either malicious_automation or vpn is blocked. The site policy
-// matches the traffic class only, like the Worker.
+// decide matches the network class only with matchNetwork; site policies match the traffic class only, like the Worker.
 func decide(v *Verdict, actions map[string]string, matchNetwork bool) (string, string) {
 	class := v.Class
 	if class == "" {
@@ -163,7 +141,6 @@ func decide(v *Verdict, actions map[string]string, matchNetwork bool) (string, s
 	return class, action
 }
 
-// BlockPage is the HTML of the 403 page.
 func BlockPage(requestID, message string) []byte {
 	if message == "" {
 		message = DefaultBlockMessage
@@ -176,7 +153,6 @@ func BlockPage(requestID, message string) []byte {
 	return []byte(body + `</body></html>`)
 }
 
-// WriteBlocked writes the 403 block page.
 func (g *Guard) WriteBlocked(w http.ResponseWriter, d Decision) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")

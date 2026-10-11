@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// verdictCache is a bounded LRU of edge check verdicts with a fixed TTL.
 type verdictCache struct {
 	mu    sync.Mutex
 	max   int

@@ -1,4 +1,3 @@
-# github.com/ipscanner/ipscanner-edge-go v0.1.0 => ../ipscanner-edge-go
+# github.com/ipscanner/ipscanner-edge-go v0.1.0
 ## explicit; go 1.22
 github.com/ipscanner/ipscanner-edge-go
-# github.com/ipscanner/ipscanner-edge-go => ../ipscanner-edge-go

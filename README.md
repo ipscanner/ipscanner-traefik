@@ -20,30 +20,36 @@ Then add a middleware with your Site ID and put it on a router.
 
 ### Coolify
 
-1. Servers > your server > Proxy. Add to the Traefik `command` list and restart the proxy:
+1. Servers > your server > Proxy. Add the two flags to the `command` list and the key to `environment` (create it next to `command` if it is missing). Save, then Restart Proxy:
 
    ```yaml
-   - '--experimental.plugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik'
-   - '--experimental.plugins.ipscanner.version=v0.1.0'
+   services:
+     traefik:
+       command:
+         # ...the flags Coolify set
+         - '--experimental.plugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik'
+         - '--experimental.plugins.ipscanner.version=v0.1.0'
+       environment:
+         - IPSCANNER_API_KEY=pk_live_...
    ```
 
-   and the key to its `environment` (see [API key](#api-key)):
+   See [API key](#api-key) for other ways to pass the key.
 
-   ```yaml
-   environment:
-     - IPSCANNER_API_KEY=pk_live_...
-   ```
-
-2. Your app > Configuration > Container Labels. Define the middleware and append it to the `middlewares` label of each router Coolify generated (`https-0-...`, `http-0-...`):
+2. Your app > Container Labels. Set Label management to edit by hand (older Coolify: untick Readonly labels), or the next deploy overwrites your labels. Append the middleware to the `middlewares` label of each `https-N-<uuid>` router Coolify generated, define it, then Deploy:
 
    ```
-   traefik.http.middlewares.ipscanner-myapp.plugin.ipscanner.siteId=site_...
    traefik.http.routers.https-0-<uuid>.middlewares=gzip,ipscanner-myapp
+   traefik.http.middlewares.ipscanner-myapp.plugin.ipscanner.siteId=site_...
+   ```
+
+   Behind Cloudflare (orange cloud), also add:
+
+   ```
+   traefik.http.middlewares.ipscanner-myapp.plugin.ipscanner.trustedProxies=cloudflare
+   traefik.http.middlewares.ipscanner-myapp.plugin.ipscanner.ipHeaders=CF-Connecting-IP
    ```
 
    Use one middleware name per app. Traefik drops a middleware that two containers define differently, and every router using it.
-
-Behind Cloudflare (orange cloud) add `trustedProxies=cloudflare` and `ipHeaders=CF-Connecting-IP` the same way.
 
 ### Docker Compose
 

@@ -132,6 +132,7 @@ Without a key every request passes with `X-IPScanner-Status: skipped`.
 | Cache | One check per visitor (site, IP, user agent) per 10 minutes, in memory, up to 10000 visitors. Kept across configuration reloads. |
 | Fail open | Timeout 1.5 s. On a timeout or error the request passes and checks pause for 30 s (5 minutes on 401, 402, 403 or 429). |
 | Blocked | 403 page with the request ID. `monitor` never blocks. |
+| Free plan | After the trial the API answers mode `monitor` and the plugin never blocks, even without `siteId`. |
 | Visitor IP | The address Traefik sees. `X-Forwarded-For` (or `ipHeaders`) only from `trustedProxies`. Traefik drops `X-Forwarded-For` from peers outside the entry point's `forwardedHeaders.trustedIPs`, so set both or use `CF-Connecting-IP`. |
 | Debug | `debug: true` adds `X-IPScanner-Status`, `-Class` and `-Action` to responses and logs every decision. |
 

@@ -30,6 +30,7 @@ type stubAPI struct {
 	checks   int
 	policies int
 	policy   string // "" = 404
+	mode     string // top level edge check mode, "" = absent
 	headers  http.Header
 	body     map[string]interface{}
 }
@@ -92,8 +93,12 @@ func (s *stubAPI) serve(w http.ResponseWriter, r *http.Request) {
 		class, network = "verified_bot", "hosting"
 		agent = `{"class":"known_bot","confidence":0.99,"action":"allow","signals":{"allowlist_verified":true}}`
 	}
-	fmt.Fprintf(w, `{"class":%q,"agent":%s,"network":{"networkClass":%q,"anonymized":%t,"riskScore":40,"country":"DE"},"site":null}`,
-		class, agent, network, class == "tor" || class == "vpn")
+	mode := ""
+	if s.mode != "" {
+		mode = fmt.Sprintf(`"mode":%q,`, s.mode)
+	}
+	fmt.Fprintf(w, `{"class":%q,%s"agent":%s,"network":{"networkClass":%q,"anonymized":%t,"riskScore":40,"country":"DE"},"site":null}`,
+		class, mode, agent, network, class == "tor" || class == "vpn")
 }
 
 type upstream struct {
@@ -171,6 +176,22 @@ func TestLocalEnforceBlocksClass(t *testing.T) {
 	}
 	if got := next.header.Get("X-IPScanner-Status"); got != "ok" {
 		t.Fatalf("upstream status %q", got)
+	}
+}
+
+func TestMonitorAccountNeverBlocks(t *testing.T) {
+	api := newStub(t, "")
+	api.mode = "monitor"
+	c := base(api)
+	c.Mode = "enforce"
+	c.BlockClasses = []string{"tor"}
+	h, next := newMiddleware(t, c)
+	w := visit(h, torIP, "/")
+	if w.Code != http.StatusOK || !next.called {
+		t.Fatalf("blocked on a monitor account: %d", w.Code)
+	}
+	if got := next.header.Get("X-IPScanner-Action"); got != "would_block" {
+		t.Fatalf("upstream action %q", got)
 	}
 }
 

@@ -7,7 +7,7 @@ services:
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
       - --experimental.plugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik
-      - --experimental.plugins.ipscanner.version=v0.1.0
+      - --experimental.plugins.ipscanner.version=v0.1.2
     environment:
       # Read by every ipscanner middleware without apiKey or apiKeyFile.
       IPSCANNER_API_KEY: ${IPSCANNER_API_KEY}

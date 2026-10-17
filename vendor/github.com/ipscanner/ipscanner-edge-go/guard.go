@@ -262,6 +262,9 @@ func (g *Guard) CheckVisitor(ctx context.Context, v Visitor) Decision {
 			d.Mode = ModeEnforce
 		}
 	}
+	if verdict.Mode == ModeMonitor {
+		d.Mode = ModeMonitor
+	}
 
 	d.Class, d.Action = decide(verdict, actions, matchNetwork)
 	d.Outcome = d.Action

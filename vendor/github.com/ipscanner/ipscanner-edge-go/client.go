@@ -13,8 +13,10 @@ import (
 )
 
 // Verdict is the POST /v1/edge/check answer; Agent, Network and Site are nil when missing.
+// Mode is what the account may do at the edge (monitor never blocks), empty from an older API.
 type Verdict struct {
 	Class    string   `json:"class"`
+	Mode     string   `json:"mode,omitempty"`
 	Agent    *Agent   `json:"agent"`
 	Network  *Network `json:"network"`
 	Site     *SiteRef `json:"site"`

@@ -48,6 +48,7 @@ func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 | Cache | One check per visitor (site, IP, user agent) per 10 minutes, in memory, bounded to 10000 entries. Concurrent requests from one visitor share one call. |
 | Fail open | One 1.5 s budget for verdict and policy. On a timeout or error the request passes and checks pause for 30 s (5 minutes on 401, 402, 403 or 429). |
 | Blocked | 403 page with the request ID. `monitor` never blocks: the outcome is `would_block` or `would_flag`. |
+| Free plan | After the trial the API answers mode `monitor` and the guard never blocks, even without `SiteID`. |
 | Visitor IP | The peer address. IP headers (default `X-Forwarded-For`) only when the peer is a trusted proxy; in a chain the nearest untrusted hop is the visitor. |
 | Debug | `Debug: true` adds `X-IPScanner-Status`, `-Class` and `-Action` to responses and logs every decision as JSON. |
 

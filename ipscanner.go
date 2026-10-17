@@ -16,7 +16,7 @@ import (
 	edge "github.com/ipscanner/ipscanner-edge-go"
 )
 
-const Version = "0.1.0"
+const Version = "0.1.2"
 
 const Source = "traefik"
 

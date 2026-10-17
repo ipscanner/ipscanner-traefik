@@ -256,7 +256,7 @@ site=$(upsert "$E2E_SITE_ENFORCE" enforce "$ENFORCE_POLICY")
 field() { printf '%s' "$site" | node -e '
 	let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
 		const v = JSON.parse(s)[process.argv[1]]; console.log(v && process.argv[1] === "last_seen_at" ? new Date(v).toISOString() : v); });' "$1"; }
-expect "sites.client_version" "$(field client_version)" 0.1.0
+expect "sites.client_version" "$(field client_version)" 0.1.2
 [[ "$(field last_seen_at)" > "$run" ]] && ok "sites.last_seen_at updated in this run" || bad "sites.last_seen_at not updated: $(field last_seen_at)"
 
 echo

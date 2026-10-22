@@ -140,9 +140,7 @@ for i in $(seq 1 30); do
 done
 mw=$(curl -s "$ADMIN/api/http/middlewares/example-ipscanner@kubernetescrd")
 grep -q '"status":"enabled"' <<<"$mw" && ok "examples/kubernetes.yml middleware enabled in Traefik" || bad "example middleware: $mw"
-rt=$(curl -s "$ADMIN/api/http/routers" | node -e '
-	let s = ""; process.stdin.on("data", d => s += d).on("end", () =>
-		console.log(JSON.parse(s).filter(r => r.name.startsWith("example-app-")).map(r => r.status).join(",")));')
+rt=$(curl -s "$ADMIN/api/http/routers?search=example-app-" | { grep -o '"status":"[a-z]*"' || true; } | cut -d'"' -f4 | paste -sd, -)
 expect "examples/kubernetes.yml IngressRoute enabled" "$rt" enabled
 sleep 2
 

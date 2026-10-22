@@ -187,7 +187,7 @@ func guardFor(cfg edge.Config) (*edge.Guard, error) {
 	return g, nil
 }
 
-// configID hashes the config so the key is not kept twice in clear text.
+// configID hashes the config so the key is not kept twice in clear text; length prefixes keep fields apart.
 func configID(c edge.Config) string {
 	parts := []string{
 		c.APIKey, c.APIURL, c.SiteID, c.Mode,
@@ -195,6 +195,9 @@ func configID(c edge.Config) string {
 		c.Timeout.String(), c.CacheTTL.String(), strconv.Itoa(c.CacheSize), c.PolicyTTL.String(),
 		c.SkipPaths, c.BlockMessage, strconv.FormatBool(c.Debug),
 	}
-	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
-	return hex.EncodeToString(sum[:])
+	h := sha256.New()
+	for _, p := range parts {
+		_, _ = h.Write([]byte(strconv.Itoa(len(p)) + ":" + p))
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

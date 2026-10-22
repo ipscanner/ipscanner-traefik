@@ -65,7 +65,7 @@ func (d Decision) Headers() map[string]string {
 	if d.Site != "" {
 		h["X-IPScanner-Site"] = d.Site
 	}
-	return h
+	return safeHeaders(h)
 }
 
 func (d Decision) DebugHeaders() map[string]string {
@@ -75,6 +75,19 @@ func (d Decision) DebugHeaders() map[string]string {
 	}
 	if d.Status == StatusOK && d.Outcome != "" {
 		h["X-IPScanner-Action"] = d.Outcome
+	}
+	return safeHeaders(h)
+}
+
+// safeHeaders drops values with control characters, which would make the proxied request fail.
+func safeHeaders(h map[string]string) map[string]string {
+	for name, value := range h {
+		for i := 0; i < len(value); i++ {
+			if c := value[i]; (c < 0x20 && c != '\t') || c == 0x7f {
+				delete(h, name)
+				break
+			}
+		}
 	}
 	return h
 }

@@ -11,10 +11,10 @@ experimental:
   plugins:
     ipscanner:
       moduleName: github.com/ipscanner/ipscanner-traefik
-      version: v0.1.2
+      version: v0.1.3
 ```
 
-CLI flags: `--experimental.plugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik` and `--experimental.plugins.ipscanner.version=v0.1.2`.
+CLI flags: `--experimental.plugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik` and `--experimental.plugins.ipscanner.version=v0.1.3`.
 
 Then add a middleware with your Site ID and put it on a router.
 
@@ -28,7 +28,7 @@ Then add a middleware with your Site ID and put it on a router.
        command:
          # ...the flags Coolify set
          - '--experimental.plugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik'
-         - '--experimental.plugins.ipscanner.version=v0.1.2'
+         - '--experimental.plugins.ipscanner.version=v0.1.3'
        environment:
          - IPSCANNER_API_KEY=pk_live_...
    ```
@@ -61,7 +61,7 @@ services:
       - --providers.docker=true
       - --entrypoints.web.address=:80
       - --experimental.plugins.ipscanner.modulename=github.com/ipscanner/ipscanner-traefik
-      - --experimental.plugins.ipscanner.version=v0.1.2
+      - --experimental.plugins.ipscanner.version=v0.1.3
     environment:
       IPSCANNER_API_KEY: ${IPSCANNER_API_KEY}
     ports: ["80:80"]
